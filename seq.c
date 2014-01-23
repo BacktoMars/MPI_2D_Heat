@@ -11,8 +11,8 @@
 //const int end = 16;
 
 #define NXPROB      8                /* x dimension of problem grid */
-#define NYPROB      8               /* y dimension of problem grid */
-#define STEPS       1                /* number of time steps */
+#define NYPROB      6               /* y dimension of problem grid */
+#define STEPS       6                /* number of time steps */
 #define MAXWORKER   8                  /* maximum number of worker tasks */
 #define MINWORKER   3                  /* minimum number of worker tasks */
 #define BEGIN       1                  /* message tag */
@@ -34,7 +34,7 @@ struct Parms {
 //void inidat(), prtdat(), update();
 
 void inidat(int nx, int ny, float *u);
-void update(int start, int end, int ny, float *u1, float *u2);
+void update(int start, int end, int nx, int ny, float *u1, float *u2);
 void prtdat(int nx, int ny, float *u1, char *fnam);
 
 int main (int argc, char* argv[])
@@ -62,7 +62,7 @@ int main (int argc, char* argv[])
 	{
 		//printf("unew[0][1] = %f\n", *(unew + 1));
 		//printf("uold[0][0] = %f\n", *(uold));
-		update(1, NXPROB-2, NYPROB, uold, unew);
+		update(1, NXPROB-2, NXPROB, NYPROB, uold, unew);
 
 
 		int i=0;
@@ -107,19 +107,29 @@ int main (int argc, char* argv[])
 /**************************************************************************
  *  subroutine update
  ****************************************************************************/
-void update(int start, int end, int ny, float *u1, float *u2)
+void update(int start, int end, int nx, int ny, float *u1, float *u2)
 {
 	int ix, iy;
+	// ix is the horizontal index and iy is the vertical index
 	for (ix = start; ix <= end; ix++) 
 		for (iy = 1; iy <= ny-2; iy++) 
-{	printf("ix = %d iy = %d\n", ix, iy);	
-		*(u2+ix*ny+iy) = *(u1+ix*ny+iy)  + 
-				parms.cx * (*(u1+(ix+1)*ny+iy) +
-						*(u1+(ix-1)*ny+iy) - 
-						2.0 * *(u1+ix*ny+iy)) +
-				parms.cy * (*(u1+ix*ny+iy+1) +
-						*(u1+ix*ny+iy-1) - 
-						2.0 * *(u1+ix*ny+iy));
+{	
+//		printf("ix = %d iy = %d\n", ix, iy);	
+//		*(u2+ix*ny+iy) = *(u1+ix*ny+iy)  + 
+//				parms.cx * (*(u1+(ix+1)*ny+iy) +
+//						*(u1+(ix-1)*ny+iy) - 
+//						2.0 * *(u1+ix*ny+iy)) +
+//				parms.cy * (*(u1+ix*ny+iy+1) +
+//						*(u1+ix*ny+iy-1) - 
+//						2.0 * *(u1+ix*ny+iy));
+		*(u2+iy*nx+ix) = *(u1+iy*nx+ix)  + 
+				parms.cx * (*(u1+(iy+1)*nx+ix) +
+						*(u1+(iy-1)*nx+ix) - 
+						2.0 * *(u1+iy*nx+ix)) +
+				parms.cy * (*(u1+iy*nx+ix+1) +
+						*(u1+iy*nx+ix-1) - 
+						2.0 * *(u1+iy*nx+ix));
+
 }
 }
 
@@ -127,25 +137,27 @@ void update(int start, int end, int ny, float *u1, float *u2)
  *  subroutine inidat
  *****************************************************************************/
 void inidat(int nx, int ny, float *u) {
-	int ix, iy;
+	int i, j;
 
-	for (ix = 0; ix <= nx-1; ix++) 
-		for (iy = 0; iy <= ny-1; iy++)
-			*(u+ix*ny+iy) = (float)(ix * (nx - ix - 1) * iy * (ny - iy - 1));
+	for (i = 0; i < ny; i++) 
+		for (j = 0; j < nx; j++)
+			u[i*nx+j] = (float)(j * (nx - j - 1) * i * (ny - i - 1));
 }
 
 /**************************************************************************
  * subroutine prtdat
  **************************************************************************/
 void prtdat(int nx, int ny, float *u1, char *fnam) {
-	int ix, iy;
+	int i, j;
 	FILE *fp;
 
 	fp = fopen(fnam, "w");
-	for (iy = ny-1; iy >= 0; iy--) {
-		for (ix = 0; ix <= nx-1; ix++) {
-			fprintf(fp, "%8.1f", *(u1+ix*ny+iy));
-			if (ix != nx-1) 
+//	for (iy = ny-1; iy >= 0; iy--) {
+//		for (ix = 0; ix <= nx-1; ix++) {
+	for (i = 0; i <= ny -1; i++) {
+		for (j = 0; j <= nx-1; j++) {
+			fprintf(fp, "%8.1f", *(u1+i*nx+j));
+			if (j != nx-1) 
 				fprintf(fp, " ");
 			else
 				fprintf(fp, "\n");

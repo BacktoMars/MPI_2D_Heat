@@ -25,8 +25,8 @@
 //const int end = 16;
 
 #define NXPROB      8                 /* x dimension of problem grid */
-#define NYPROB      8                 /* y dimension of problem grid */
-#define STEPS       1                /* number of time steps */
+#define NYPROB      6                 /* y dimension of problem grid */
+#define STEPS       6                /* number of time steps */
 #define MAXWORKER   8                  /* maximum number of worker tasks */
 #define MINWORKER   3                  /* minimum number of worker tasks */
 #define BEGIN       1                  /* message tag */
@@ -43,7 +43,7 @@ struct Parms {
 
 
 void inidat(int nx, int ny, float *u);
-void update(int start, int end, int ny, float *u1, float *u2);
+void update(int start, int end, int nx, int ny, float *u1, float *u2);
 void prtdat(int nx, int ny, float *u1, char *fnam);
 
 
@@ -79,7 +79,7 @@ int main (int argc, char* argv[])
 
 	// use rank 0 as the master process
 	numWorkers = size - 1;
-	colPerProcess = NYPROB/numWorkers;
+	colPerProcess = NXPROB/numWorkers;
 
 	if (rank==0) // master node
 	{
@@ -114,21 +114,19 @@ int main (int argc, char* argv[])
 
 		}
 		// wait for results from workers
-		for (j=1; j<numWorkers; j++)
+		for (j=1; j<=numWorkers; j++)
 		{
 			MPI_Recv(&colOffset,1, MPI_INT, j, DONE, MPI_COMM_WORLD, &status);
 			MPI_Recv(&colPerProcess,1, MPI_INT, j, DONE, MPI_COMM_WORLD, &status);
 			int k=0;
-			for (k=0; k<NYPROB; k++)	
+			for (k=0; k<NYPROB; k++){	
 				MPI_Recv(uold+k*NXPROB+colOffset,colPerProcess, MPI_FLOAT, j, DONE, MPI_COMM_WORLD, &status);
+				printf("received %d data from process %d\n", colPerProcess, j);
+			}
 		}
-
 		char fileName[20];
 		sprintf(fileName, "par-t%d", STEPS);
 		prtdat(NXPROB, NYPROB, uold, fileName);
-
-
-
 	}
 	// worker processes
 	if (rank != 0)
@@ -188,36 +186,54 @@ int main (int argc, char* argv[])
 
 			// update the local matrix
 			int ix, iy;
-			for (ix = 1; ix <= NYPROB-2; ix++)
-			{ 
-				for (iy = start; iy <= end; iy++) 
-				{	//printf("ix = %d iy = %d\n", ix, iy);	
-					unew[ix*NXPROB+iy] = uold[ix*NXPROB+iy]  + 
-						parms.cx * (uold[(ix+1)*NXPROB+iy] +
-								uold[(ix-1)*NXPROB+iy] - 
-								2.0 * uold[ix*NXPROB+iy]) +
-						parms.cy * ( uold[ix*NXPROB+iy+1] +
-								uold[ix*NXPROB+iy-1] - 
-								2.0 * uold[ix*NXPROB+iy]);
+
+			for (ix = start; ix <= end; ix++) 
+			{	
+				//printf("ix = %d\n", ix);	
+
+				for (iy = 1; iy <= NYPROB-2; iy++)
+				{ 
+					unew[iy*NXPROB+ix] = uold[iy*NXPROB+ix]  + 
+						parms.cx * (uold[(iy+1)*NXPROB+ix] +
+								uold[(iy-1)*NXPROB+ix] - 
+								2.0 * uold[iy*NXPROB+ix]) +
+						parms.cy * ( uold[iy*NXPROB+ix+1] +
+								uold[iy*NXPROB+ix-1] - 
+								2.0 * uold[iy*NXPROB+ix]);
 				}
 			}
 
 			// interchange uold and unew
 
-			for (ix = 1; ix <= NYPROB - 2; ++ix)
-				for (iy = start; iy <= end; ++iy)
-				{	uold[ix*NXPROB + iy] = unew[ix*NXPROB + iy];
+			for (ix = start; ix <= end; ++ix)
+				for (iy = 1; iy <= NYPROB - 2; ++iy)
+				{	uold[iy*NXPROB + ix] = unew[iy*NXPROB + ix];
 				}
 
 
 			// send results back to master process
-
-			MPI_Send(&colOffset, 1, MPI_INT, MASTER, DONE, MPI_COMM_WORLD);
-			MPI_Send(&colPerProcess, 1, MPI_INT, MASTER, DONE, MPI_COMM_WORLD);
-			for (k=0; k<NYPROB; k++)
-				MPI_Send(uold+k*NXPROB+colOffset, colPerProcess, MPI_FLOAT, MASTER, DONE, MPI_COMM_WORLD);
+			/*
+			   printf("updated u in process %d:\n", rank);
+			   for (iy = 1; iy <= NYPROB-2; iy++)
+			   {
+			   for (ix = start; ix <= end; ix++) 
+			   { 
+			   printf("%8.1f", uold[iy*NXPROB+ix]);
+			   if (ix != end) 
+			   printf(" ");
+			   else
+			   printf("\n");
+			   }	
+			   }
+			 */
 			//MPI_Finalize();
 		} // end iteration
+
+		MPI_Send(&colOffset, 1, MPI_INT, MASTER, DONE, MPI_COMM_WORLD);
+		MPI_Send(&colPerProcess, 1, MPI_INT, MASTER, DONE, MPI_COMM_WORLD);
+		for (k=0; k<NYPROB; k++)
+			MPI_Send(uold+k*NXPROB+colOffset, colPerProcess, MPI_FLOAT, MASTER, DONE, MPI_COMM_WORLD);
+
 
 	} // end rank!=0
 
@@ -229,19 +245,19 @@ int main (int argc, char* argv[])
 /**************************************************************************
  *  subroutine update
  ****************************************************************************/
-void update(int start, int end, int ny, float *u1, float *u2)
+void update(int start, int end, int nx, int ny, float *u1, float *u2)
 {
 	int ix, iy;
 	for (ix = start; ix <= end; ix++) 
 		for (iy = 1; iy <= ny-2; iy++) 
 		{	//printf("ix = %d iy = %d\n", ix, iy);	
-			*(u2+ix*ny+iy) = *(u1+ix*ny+iy)  + 
-				parms.cx * (*(u1+(ix+1)*ny+iy) +
-						*(u1+(ix-1)*ny+iy) - 
-						2.0 * *(u1+ix*ny+iy)) +
-				parms.cy * (*(u1+ix*ny+iy+1) +
-						*(u1+ix*ny+iy-1) - 
-						2.0 * *(u1+ix*ny+iy));
+			u2[iy*nx+ix] = u1[iy*nx+ix]  + 
+				parms.cx * ( u1[(iy+1)*nx+ix] +
+						u1[(iy-1)*nx+ix] - 
+						2.0 * u1[iy*nx+ix] ) +
+				parms.cy * ( u1[iy*nx+ix+1] +
+						u1[iy*nx+ix-1] - 
+						2.0 * u1[iy*nx+ix]);
 		}
 }
 
@@ -249,25 +265,35 @@ void update(int start, int end, int ny, float *u1, float *u2)
  *  subroutine inidat
  *****************************************************************************/
 void inidat(int nx, int ny, float *u) {
-	int ix, iy;
+	/*	int ix, iy;
 
-	for (ix = 0; ix <= nx-1; ix++) 
+		for (ix = 0; ix <= nx-1; ix++) 
 		for (iy = 0; iy <= ny-1; iy++)
-			*(u+ix*ny+iy) = (float)(ix * (nx - ix - 1) * iy * (ny - iy - 1));
+	 *(u+ix*ny+iy) = (float)(ix * (nx - ix - 1) * iy * (ny - iy - 1));
+	 */
+	int i,j;
+	for (i=0; i<ny; ++i)
+		for (j=0; j<nx; ++j)
+		{
+			u[i*nx+j] = (float)(i*(ny - i -1)*j*(nx - j -1));
+		}
 }
 
 /**************************************************************************
  * subroutine prtdat
  **************************************************************************/
 void prtdat(int nx, int ny, float *u1, char *fnam) {
-	int ix, iy;
+	int i, j;
 	FILE *fp;
 
 	fp = fopen(fnam, "w");
-	for (iy = ny-1; iy >= 0; iy--) {
-		for (ix = 0; ix <= nx-1; ix++) {
-			fprintf(fp, "%8.1f", *(u1+ix*ny+iy));
-			if (ix != nx-1) 
+	//	for (iy = ny-1; iy >= 0; iy--) {
+	//		for (ix = 0; ix <= nx-1; ix++) {
+	for (i=0; i < ny; i++) {
+		for(j=0; j < nx; j++) {
+
+			fprintf(fp, "%8.1f", u1[i*nx+j]);
+			if (j != nx-1) 
 				fprintf(fp, " ");
 			else
 				fprintf(fp, "\n");
